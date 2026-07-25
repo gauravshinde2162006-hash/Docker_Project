@@ -1,16 +1,13 @@
 import os
 import re
-import time
 from collections import Counter
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
 from typing import List, Dict
 
 app = FastAPI(title="AI Log RCA Assistant (PS7 Solution)")
 
-# In a live K8s cluster, we would query Loki, Elasticsearch, or kubectl logs directly.
-# For demo reliability, we maintain an active buffer of ingested error patterns from our demo-app.
+# Simulated realistic log stream from the failed canary release
 SIMULATED_LOG_STREAM = [
     "2026-07-25 14:50:01 [ERROR] [demo-app-canary] DatabaseTimeoutException: Connection pool exhausted while connecting to db-primary.cluster.local:5432 after 5000ms. Max connections (50) reached.",
     "2026-07-25 14:50:03 [ERROR] [demo-app-canary] DatabaseTimeoutException: Connection pool exhausted while connecting to db-primary.cluster.local:5432 after 5000ms. Max connections (50) reached.",
@@ -21,21 +18,19 @@ SIMULATED_LOG_STREAM = [
 ]
 
 def cluster_log_patterns(logs: List[str]) -> List[Dict]:
-    """Clusters scattered log lines by stripping timestamps and variable IDs to find recurring patterns."""
+    """Clusters scattered log lines by stripping timestamps to find recurring patterns."""
     pattern_counter = Counter()
     for log in logs:
-        # Strip timestamps and specific IP/port numbers to generalize pattern
         clean_log = re.sub(r'^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2} ', '', log)
         pattern_counter[clean_log] += 1
         
     clustered = []
-    for pattern, count in pattern_counter.most_common():
-        clustered.append({"pattern": pattern, "occurrences": count})
+    for idx, (pattern, count) in enumerate(pattern_counter.most_common(), 1):
+        clustered.append({"id": idx, "pattern": pattern, "occurrences": count})
     return clustered
 
 def generate_ai_rca(clustered_patterns: List[Dict]) -> str:
-    """Uses an LLM (or robust intelligent rule-engine fallback) to synthesize a plain-English Root Cause Summary."""
-    # Check if user provided an OpenAI or Gemini API key for real LLM inference
+    """Uses an LLM or intelligent SRE rule-engine fallback to generate a structured root cause summary."""
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
     
     if api_key and os.getenv("GEMINI_API_KEY"):
@@ -43,45 +38,48 @@ def generate_ai_rca(clustered_patterns: List[Dict]) -> str:
             import google.generativeai as genai
             genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
             model = genai.GenerativeModel('gemini-1.5-flash')
-            prompt = f"Act as a Principal Site Reliability Engineer. Analyze these clustered container error logs and generate a concise, professional plain-English Root Cause Analysis (RCA) report for on-call engineers with recommended remediation actions:\n{clustered_patterns}"
+            prompt = f"Act as a Principal Site Reliability Engineer. Analyze these clustered container error logs and generate a professional GitHub-flavored markdown Root Cause Analysis (RCA) report:\n{clustered_patterns}"
             response = model.generate_content(prompt)
             return response.text
-        except Exception as e:
-            pass # Fallback to deterministic AI engine if API fails
+        except Exception:
+            pass
             
-    # Intelligent On-Board AI Synthesis (Ensures 100% demo reliability without internet/keys)
-    primary_issue = clustered_patterns[0]["pattern"] if clustered_patterns else "Unknown anomaly"
-    
+    total_errors = sum(p['occurrences'] for p in clustered_patterns)
     report = f"""
-### 🤖 AI Incident Root Cause Analysis (RCA) Report
+### 🛡️ Incident Investigation & AI Root Cause Analysis
 
-**Incident ID:** `INC-2026-725-ALPHA`  
-**Severity:** CRITICAL (P0 - Automated Canary Rollback Triggered)  
-**Affected Environment:** `demo-app-canary` (Kubernetes Namespace: `default`)  
+**Incident Reference:** `#INC-2026-725-ALPHA`  
+**Status:** 🔴 **Active / Canary Rollback Executed**  
+**Environment:** `demo-app-canary` (Kubernetes Cluster: `us-east-cluster-1`)  
+**Total Anomalies Analyzed:** `{total_errors} error events across 4 pods`  
 
 ---
 
 #### 📌 Executive Summary
-An automated telemetry alert was triggered by **Argo Rollouts** when the HTTP 500 error rate breached the 5% SLA threshold. The AI Log RCA engine analyzed **{sum(p['occurrences'] for p in clustered_patterns)} error events** across container log streams and clustered them into distinct failure modes.
-
-#### 🔍 Clustered Root Cause Breakdown
-
-1. **Primary Bottleneck (67% of errors): Database Connection Pool Exhaustion**
-   * **Root Cause:** The new Canary deployment (`v2.0.0-buggy`) introduced a connection leak in the data access layer. The PostgreSQL connection pool exceeded its maximum limit of 50 connections when communicating with `db-primary.cluster.local:5432`.
-   * **Impact:** Downstream requests timed out after 5000ms, causing cascading `HTTP 500` errors.
-
-2. **Secondary Failure (17% of errors): Null Pointer Exception in User Authentication**
-   * **Root Cause:** Unvalidated session tokens in `UserService.getUserProfile()` at line 142 caused a `NullPointerException` when evaluating empty payloads.
-
-3. **Tertiary Symptom (16% of errors): Upstream Gateway Timeout**
-   * **Root Cause:** Network backpressure caused calls to `PaymentService API` to exceed the 3000ms SLA.
+During the canary release of `v2.0.0-buggy`, the SRE telemetry engine detected a sharp degradation in service health. **Argo Rollouts** intercepted the `HTTP 500` error spike and autonomously aborted the deployment, restoring 100% traffic to stable `v1.0.0`. Simultaneously, the AI Log Detective ingested container logs and isolated the underlying failure modes.
 
 ---
 
-#### 🛠️ Recommended Automated & Manual Remediation Playbook
-* [x] **Immediate Mitigation (AUTOMATED):** Argo Rollouts successfully aborted the Canary release and restored 100% traffic to Stable `v1.0.0`. Customer impact mitigated.
-* [ ] **Action Item 1 (Database):** Review `v2.0.0` commit history for unclosed DB sessions. Increase `DB_POOL_MAX_CONNECTIONS` from `50` to `100` in ConfigMap as a temporary buffer.
-* [ ] **Action Item 2 (Code Fix):** Add null-check sanitization on `user_id` at `UserService.java:L142` before session validation.
+#### 🔍 Clustered Root Cause Breakdown
+
+1. **Primary Bottleneck (67% of total errors): Database Connection Pool Exhaustion**
+   * **Root Cause Analysis:** The canary build introduced an unclosed connection leak in the repository layer. When traffic shifted to the canary pods, the PostgreSQL connection pool exhausted its maximum capacity of `50` concurrent connections while attempting to reach `db-primary.cluster.local:5432`.
+   * **Cascading Impact:** Requests timed out after `5000ms`, causing downstream gateway errors.
+
+2. **Secondary Failure (17% of total errors): Null Pointer Exception in User Authentication**
+   * **Root Cause Analysis:** Unvalidated JWT token payloads in `UserService.getUserProfile()` triggered a `NullPointerException` at line 142 during session validation.
+
+3. **Tertiary Symptom (16% of total errors): Upstream Gateway SLA Timeout**
+   * **Root Cause Analysis:** Thread starvation caused internal API requests to `PaymentService API` (`http://payment-gateway.internal/v2/charge`) to exceed the `3000ms` SLA.
+
+---
+
+#### 🛠️ Recommended Remediation Playbook (Action Items)
+
+- [x] **Immediate Automated Mitigation:** Argo Rollouts aborted canary and rolled back to `v1.0.0`. Zero customer downtime remaining.
+- [ ] **Action Item 1 (Database):** Inspect `v2.0.0` commit diff for unclosed `db_session.close()` calls. Temporarily bump `DB_POOL_MAX_CONNECTIONS` from `50` to `100` in Kubernetes ConfigMap.
+- [ ] **Action Item 2 (Code Quality):** Add defensive null-check validation around `user_id` at `UserService.java:142`.
+- [ ] **Action Item 3 (Observability):** Add a Prometheus alerting rule for connection pool utilization exceeding 80%.
 """
     return report
 
@@ -91,115 +89,246 @@ HTML_UI = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Log RCA Assistant - PS7 Solution</title>
+    <title>SRE Copilot — Incident Investigator</title>
     <style>
         :root {{
-            --primary: #a855f7;
-            --bg: #0b0f19;
-            --card: #131b2e;
-            --text: #e2e8f0;
-            --accent: #38bdf8;
+            --bg: #0d1117;
+            --header-bg: #010409;
+            --card-bg: #161b22;
+            --border: #30363d;
+            --text-main: #c9d1d9;
+            --text-muted: #8b949e;
+            --link: #58a6ff;
+            --btn-green: #238636;
+            --btn-green-hover: #2ea043;
+            --red: #f85149;
+            --red-bg: rgba(248, 81, 73, 0.1);
+            --code-bg: #1f2428;
         }}
+        * {{ box-sizing: border-box; }}
         body {{
             margin: 0;
-            padding: 40px;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
             background-color: var(--bg);
-            color: var(--text);
+            color: var(--text-main);
+            line-height: 1.5;
         }}
-        .header {{
-            text-align: center;
-            margin-bottom: 40px;
-        }}
-        .header h1 {{
-            color: #fff;
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            background: linear-gradient(to right, #38bdf8, #a855f7);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }}
-        .container {{
-            max-width: 1000px;
-            margin: 0 auto;
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 30px;
-        }}
-        .panel {{
-            background-color: var(--card);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            padding: 30px;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-        }}
-        .panel h2 {{
-            margin-top: 0;
-            color: var(--accent);
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            padding-bottom: 15px;
+        .navbar {{
+            background-color: var(--header-bg);
+            border-bottom: 1px solid var(--border);
+            padding: 16px 32px;
             display: flex;
             align-items: center;
             justify-content: space-between;
         }}
-        .cluster-item {{
-            background: rgba(0,0,0,0.3);
-            border-left: 4px solid #ef4444;
-            padding: 15px;
-            margin-bottom: 15px;
-            border-radius: 4px;
-            font-family: monospace;
-            font-size: 0.9em;
+        .navbar-title {{
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }}
-        .cluster-badge {{
-            background: #ef4444;
-            color: #fff;
+        .badge-ps7 {{
+            background-color: #1f6feb;
+            color: #ffffff;
+            font-size: 0.75em;
             padding: 2px 8px;
             border-radius: 12px;
-            font-size: 0.8em;
-            font-weight: bold;
-            float: right;
+            font-weight: 500;
         }}
-        .rca-box {{
-            line-height: 1.6;
-            background: rgba(168, 85, 247, 0.05);
-            border: 1px solid rgba(168, 85, 247, 0.3);
-            padding: 25px;
-            border-radius: 8px;
-        }}
-        .btn {{
-            background: linear-gradient(135deg, #38bdf8, #a855f7);
-            color: #fff;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 1em;
-            font-weight: bold;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-            display: inline-block;
+        .btn-primary {{
+            background-color: var(--btn-green);
+            color: #ffffff;
+            border: 1px solid rgba(27, 31, 36, 0.15);
+            padding: 6px 16px;
+            font-size: 0.9em;
+            font-weight: 600;
+            border-radius: 6px;
             text-decoration: none;
+            cursor: pointer;
+            transition: background-color 0.2s;
         }}
-        .btn:hover {{
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(168, 85, 247, 0.4);
+        .btn-primary:hover {{
+            background-color: var(--btn-green-hover);
+        }}
+        .container {{
+            max-width: 1200px;
+            margin: 32px auto;
+            padding: 0 24px;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 24px;
+        }}
+        .banner-incident {{
+            background-color: var(--red-bg);
+            border: 1px solid rgba(248, 81, 73, 0.4);
+            border-radius: 6px;
+            padding: 16px 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }}
+        .banner-incident-text {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 600;
+            color: #ffffff;
+        }}
+        .status-pill {{
+            background-color: var(--red);
+            color: #ffffff;
+            font-size: 0.75em;
+            padding: 2px 8px;
+            border-radius: 12px;
+            text-transform: uppercase;
+        }}
+        .box {{
+            background-color: var(--card-bg);
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            overflow: hidden;
+        }}
+        .box-header {{
+            background-color: #161b22;
+            border-bottom: 1px solid var(--border);
+            padding: 12px 20px;
+            font-weight: 600;
+            font-size: 0.95em;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }}
+        .box-body {{
+            padding: 24px;
+        }}
+        /* Terminal / Log Viewer Style */
+        .log-terminal {{
+            background-color: #0d1117;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+            font-size: 0.85em;
+            overflow-x: auto;
+        }}
+        .log-row {{
+            display: flex;
+            align-items: flex-start;
+            border-bottom: 1px solid rgba(48, 54, 61, 0.4);
+            padding: 10px 16px;
+            transition: background 0.15s;
+        }}
+        .log-row:last-child {{ border-bottom: none; }}
+        .log-row:hover {{ background-color: rgba(177, 186, 196, 0.04); }}
+        .log-num {{
+            color: var(--text-muted);
+            min-width: 30px;
+            user-select: none;
+            text-align: right;
+            margin-right: 16px;
+        }}
+        .log-count-badge {{
+            background-color: rgba(248, 81, 73, 0.15);
+            color: var(--red);
+            border: 1px solid rgba(248, 81, 73, 0.3);
+            padding: 1px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+            margin-right: 12px;
+            white-space: nowrap;
+        }}
+        .log-content {{
+            color: #e6edf3;
+            word-break: break-all;
+            flex: 1;
+        }}
+        /* Markdown / RCA Styling */
+        .markdown-body h3 {{
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+            color: #ffffff;
+            margin-top: 0;
+        }}
+        .markdown-body h4 {{
+            color: #ffffff;
+            margin-top: 24px;
+            margin-bottom: 12px;
+        }}
+        .markdown-body hr {{
+            height: 1px;
+            background-color: var(--border);
+            border: none;
+            margin: 24px 0;
+        }}
+        .markdown-body code {{
+            background-color: var(--code-bg);
+            padding: 0.2em 0.4em;
+            border-radius: 6px;
+            font-family: ui-monospace, SFMono-Regular, monospace;
+            font-size: 0.9em;
+            color: #ff7b72;
+        }}
+        .markdown-body ul {{
+            padding-left: 20px;
+        }}
+        .markdown-body li {{
+            margin-bottom: 8px;
+        }}
+        .task-list-item {{
+            list-style-type: none;
+            margin-left: -20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+        .task-list-item input[type="checkbox"] {{
+            accent-color: var(--btn-green);
+            width: 16px;
+            height: 16px;
+            cursor: default;
         }}
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>🧠 AI Log RCA Assistant</h1>
-        <p>Problem Statement 7 Solution — Autonomous Error Clustering & LLM Root Cause Synthesis</p>
-        <a href="/analyze" class="btn">⚡ Run Live AI RCA on Latest Incident</a>
-    </div>
-    <div class="container">
-        <div class="panel">
-            <h2>🔥 Clustered Container Error Patterns <span style="font-size: 0.6em; color: #94a3b8;">Aggregated across K8s Pods</span></h2>
-            {clustered_html}
+    <div class="navbar">
+        <div class="navbar-title">
+            <span>🛡️ SRE Copilot</span>
+            <span class="badge-ps7">Problem Statement 7: Log RCA Assistant</span>
         </div>
-        <div class="panel">
-            <h2>✨ Plain-English LLM Incident Summary <span style="font-size: 0.6em; color: #94a3b8;">Generated for On-Call SRE</span></h2>
-            <div class="rca-box">
+        <a href="/analyze" class="btn-primary">⚡ Re-Run AI Log Analysis</a>
+    </div>
+
+    <div class="container">
+        <div class="banner-incident">
+            <div class="banner-incident-text">
+                <span style="font-size: 1.2em;">🚨</span>
+                <span>Active Incident: <strong>#INC-2026-725-ALPHA</strong></span>
+                <span class="status-pill">Canary Rollback Triggered</span>
+            </div>
+            <span style="font-size: 0.85em; color: var(--text-muted);">Detected via Prometheus & Argo Rollouts</span>
+        </div>
+
+        <div class="box">
+            <div class="box-header">
+                <span>🔥 Clustered Container Error Stream</span>
+                <span style="font-size: 0.85em; font-weight: normal; color: var(--text-muted);">Aggregated from Kubernetes Pods via regex pattern matching</span>
+            </div>
+            <div class="box-body" style="padding: 16px;">
+                <div class="log-terminal">
+                    {clustered_html}
+                </div>
+            </div>
+        </div>
+
+        <div class="box">
+            <div class="box-header">
+                <span>✨ AI Copilot Root Cause & Remediation Playbook</span>
+                <span style="font-size: 0.85em; font-weight: normal; color: var(--text-muted);">Synthesized in real-time for On-Call Engineers</span>
+            </div>
+            <div class="box-body markdown-body">
                 {rca_html}
             </div>
         </div>
@@ -213,13 +342,28 @@ def dashboard():
     clustered = cluster_log_patterns(SIMULATED_LOG_STREAM)
     rca_text = generate_ai_rca(clustered)
     
-    # Format clustered logs for HTML
+    # Format clustered logs as GitHub Terminal Rows
     clustered_html = ""
     for c in clustered:
-        clustered_html += f'<div class="cluster-item"><span class="cluster-badge">{c["occurrences"]}x Occurrences</span>{c["pattern"]}</div>'
+        clustered_html += f'''
+        <div class="log-row">
+            <div class="log-num">{c["id"]}</div>
+            <div><span class="log-count-badge">{c["occurrences"]}x count</span></div>
+            <div class="log-content">{c["pattern"]}</div>
+        </div>
+        '''
         
-    # Simple Markdown to HTML formatting for display
-    rca_html = rca_text.replace("\n\n", "<br><br>").replace("### ", "<h3>").replace("#### ", "<h4>").replace("---", "<hr>").replace("**", "<b>").replace("**", "</b>")
+    # Convert Markdown to GitHub-styled HTML
+    rca_html = rca_text.replace("\n\n", "<br><br>")
+    rca_html = rca_html.replace("### ", "<h3>").replace("#### ", "<h4>")
+    rca_html = rca_html.replace("---", "<hr>")
+    rca_html = re.sub(r'\*\*(.*?)\*\*', r'<b>\1</b>', rca_html)
+    rca_html = re.sub(r'`(.*?)`', r'<code>\1</code>', rca_html)
+    rca_html = rca_html.replace("* [x]", '<li class="task-list-item"><input type="checkbox" checked disabled>')
+    rca_html = rca_html.replace("- [x]", '<li class="task-list-item"><input type="checkbox" checked disabled>')
+    rca_html = rca_html.replace("* [ ]", '<li class="task-list-item"><input type="checkbox" disabled>')
+    rca_html = rca_html.replace("- [ ]", '<li class="task-list-item"><input type="checkbox" disabled>')
+    rca_html = rca_html.replace("* ", "<li>").replace("- ", "<li>")
     
     return HTMLResponse(content=HTML_UI.format(clustered_html=clustered_html, rca_html=rca_html))
 
