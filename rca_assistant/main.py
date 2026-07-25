@@ -5,9 +5,8 @@ from fastapi import FastAPI
 from fastapi.responses import HTMLResponse
 from typing import List, Dict
 
-app = FastAPI(title="AI Log RCA Assistant (PS7 Solution)")
+app = FastAPI(title="AI Log RCA Assistant - Enterprise SRE Console")
 
-# Simulated realistic log stream from the failed canary release
 SIMULATED_LOG_STREAM = [
     "2026-07-25 14:50:01 [ERROR] [demo-app-canary] DatabaseTimeoutException: Connection pool exhausted while connecting to db-primary.cluster.local:5432 after 5000ms. Max connections (50) reached.",
     "2026-07-25 14:50:03 [ERROR] [demo-app-canary] DatabaseTimeoutException: Connection pool exhausted while connecting to db-primary.cluster.local:5432 after 5000ms. Max connections (50) reached.",
@@ -30,7 +29,7 @@ def cluster_log_patterns(logs: List[str]) -> List[Dict]:
     return clustered
 
 def generate_ai_rca(clustered_patterns: List[Dict]) -> str:
-    """Uses an LLM or intelligent SRE rule-engine fallback to generate a structured root cause summary."""
+    """Uses an LLM or intelligent SRE rule-engine fallback to generate an enterprise-grade root cause summary without emojis."""
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("OPENAI_API_KEY")
     
     if api_key and os.getenv("GEMINI_API_KEY"):
@@ -38,7 +37,7 @@ def generate_ai_rca(clustered_patterns: List[Dict]) -> str:
             import google.generativeai as genai
             genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
             model = genai.GenerativeModel('gemini-1.5-flash')
-            prompt = f"Act as a Principal Site Reliability Engineer. Analyze these clustered container error logs and generate a professional GitHub-flavored markdown Root Cause Analysis (RCA) report:\n{clustered_patterns}"
+            prompt = f"Act as a Principal Site Reliability Engineer. Analyze these clustered container error logs and generate a strictly professional, clinical, zero-emoji Root Cause Analysis (RCA) report in standard engineering markdown format:\n{clustered_patterns}"
             response = model.generate_content(prompt)
             return response.text
         except Exception:
@@ -46,40 +45,40 @@ def generate_ai_rca(clustered_patterns: List[Dict]) -> str:
             
     total_errors = sum(p['occurrences'] for p in clustered_patterns)
     report = f"""
-### 🛡️ Incident Investigation & AI Root Cause Analysis
+### Incident Investigation and Root Cause Analysis
 
-**Incident Reference:** `#INC-2026-725-ALPHA`  
-**Status:** 🔴 **Active / Canary Rollback Executed**  
+**Incident Reference:** `INC-2026-725-ALPHA`  
+**Status:** `CRITICAL` / `CANARY_ABORTED`  
 **Environment:** `demo-app-canary` (Kubernetes Cluster: `us-east-cluster-1`)  
-**Total Anomalies Analyzed:** `{total_errors} error events across 4 pods`  
+**Anomalies Ingested:** `{total_errors} events across 4 container instances`  
 
 ---
 
-#### 📌 Executive Summary
-During the canary release of `v2.0.0-buggy`, the SRE telemetry engine detected a sharp degradation in service health. **Argo Rollouts** intercepted the `HTTP 500` error spike and autonomously aborted the deployment, restoring 100% traffic to stable `v1.0.0`. Simultaneously, the AI Log Detective ingested container logs and isolated the underlying failure modes.
+#### Executive Summary
+During the progressive canary release of `v2.0.0-buggy`, real-time telemetry monitoring detected a severe degradation in application availability. Argo Rollouts intercepted the HTTP 500 error metric breach against Prometheus and autonomously aborted the canary deployment, rolling back 100% of user traffic to stable revision `v1.0.0`. Simultaneously, the automated Log RCA engine ingested scattered container log streams and clustered them into three primary failure modes.
 
 ---
 
-#### 🔍 Clustered Root Cause Breakdown
+#### Clustered Root Cause Breakdown
 
 1. **Primary Bottleneck (67% of total errors): Database Connection Pool Exhaustion**
-   * **Root Cause Analysis:** The canary build introduced an unclosed connection leak in the repository layer. When traffic shifted to the canary pods, the PostgreSQL connection pool exhausted its maximum capacity of `50` concurrent connections while attempting to reach `db-primary.cluster.local:5432`.
-   * **Cascading Impact:** Requests timed out after `5000ms`, causing downstream gateway errors.
+   * **Root Cause Analysis:** The revision `v2.0.0-buggy` introduced an unclosed database session leak within the persistence layer. When traffic shifted to the canary pods, the PostgreSQL connection pool exhausted its maximum configured capacity of `50` concurrent connections while attempting to reach `db-primary.cluster.local:5432`.
+   * **Cascading Impact:** Downstream requests timed out after `5000ms`, resulting in cascading HTTP 500 exceptions across the service mesh.
 
-2. **Secondary Failure (17% of total errors): Null Pointer Exception in User Authentication**
-   * **Root Cause Analysis:** Unvalidated JWT token payloads in `UserService.getUserProfile()` triggered a `NullPointerException` at line 142 during session validation.
+2. **Secondary Failure Mode (17% of total errors): Null Pointer Exception in User Authentication**
+   * **Root Cause Analysis:** Unvalidated JWT token payloads in `UserService.getUserProfile()` triggered an unhandled `NullPointerException` at line 142 during session validation.
 
 3. **Tertiary Symptom (16% of total errors): Upstream Gateway SLA Timeout**
-   * **Root Cause Analysis:** Thread starvation caused internal API requests to `PaymentService API` (`http://payment-gateway.internal/v2/charge`) to exceed the `3000ms` SLA.
+   * **Root Cause Analysis:** Connection thread starvation caused internal API requests targeting `PaymentService API` (`http://payment-gateway.internal/v2/charge`) to exceed the required `3000ms` SLA.
 
 ---
 
-#### 🛠️ Recommended Remediation Playbook (Action Items)
+#### Remediation Playbook and Action Items
 
-- [x] **Immediate Automated Mitigation:** Argo Rollouts aborted canary and rolled back to `v1.0.0`. Zero customer downtime remaining.
-- [ ] **Action Item 1 (Database):** Inspect `v2.0.0` commit diff for unclosed `db_session.close()` calls. Temporarily bump `DB_POOL_MAX_CONNECTIONS` from `50` to `100` in Kubernetes ConfigMap.
-- [ ] **Action Item 2 (Code Quality):** Add defensive null-check validation around `user_id` at `UserService.java:142`.
-- [ ] **Action Item 3 (Observability):** Add a Prometheus alerting rule for connection pool utilization exceeding 80%.
+- [x] **Automated Mitigation:** Argo Rollouts aborted canary deployment and restored 100% traffic to stable revision `v1.0.0`. Customer impact mitigated.
+- [ ] **Action Item 1 (Database Architecture):** Inspect commit history of revision `v2.0.0` for unclosed `db_session.close()` statements. Temporarily increase `DB_POOL_MAX_CONNECTIONS` from `50` to `100` within the Kubernetes ConfigMap.
+- [ ] **Action Item 2 (Code Quality):** Implement defensive null-check validation around `user_id` parameter at `UserService.java:142` prior to token evaluation.
+- [ ] **Action Item 3 (Observability):** Configure an automated Prometheus alerting rule for connection pool saturation exceeding 80% threshold.
 """
     return report
 
@@ -89,193 +88,223 @@ HTML_UI = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SRE Copilot — Incident Investigator</title>
+    <title>SRE Incident Console | AI Log RCA Assistant</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
         :root {{
-            --bg: #0d1117;
-            --header-bg: #010409;
-            --card-bg: #161b22;
-            --border: #30363d;
+            --bg-canvas: #0a0c10;
+            --bg-header: #111418;
+            --bg-card: #111418;
+            --bg-terminal: #0a0c10;
+            --border: #22272e;
             --text-main: #c9d1d9;
-            --text-muted: #8b949e;
-            --link: #58a6ff;
-            --btn-green: #238636;
-            --btn-green-hover: #2ea043;
-            --red: #f85149;
-            --red-bg: rgba(248, 81, 73, 0.1);
-            --code-bg: #1f2428;
+            --text-muted: #768390;
+            --accent-blue: #2f81f7;
+            --badge-red-bg: #da3633;
+            --badge-red-text: #ffffff;
+            --code-bg: #161b22;
         }}
         * {{ box-sizing: border-box; }}
         body {{
             margin: 0;
             padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-            background-color: var(--bg);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            font-size: 13px;
+            background-color: var(--bg-canvas);
             color: var(--text-main);
             line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
         }}
         .navbar {{
-            background-color: var(--header-bg);
+            background-color: var(--bg-header);
             border-bottom: 1px solid var(--border);
-            padding: 16px 32px;
+            padding: 12px 24px;
             display: flex;
             align-items: center;
             justify-content: space-between;
         }}
-        .navbar-title {{
-            font-size: 1.1em;
-            font-weight: 600;
-            color: #ffffff;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }}
-        .badge-ps7 {{
-            background-color: #1f6feb;
-            color: #ffffff;
-            font-size: 0.75em;
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-weight: 500;
-        }}
-        .btn-primary {{
-            background-color: var(--btn-green);
-            color: #ffffff;
-            border: 1px solid rgba(27, 31, 36, 0.15);
-            padding: 6px 16px;
-            font-size: 0.9em;
-            font-weight: 600;
-            border-radius: 6px;
-            text-decoration: none;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }}
-        .btn-primary:hover {{
-            background-color: var(--btn-green-hover);
-        }}
-        .container {{
-            max-width: 1200px;
-            margin: 32px auto;
-            padding: 0 24px;
-            display: grid;
-            grid-template-columns: 1fr;
-            gap: 24px;
-        }}
-        .banner-incident {{
-            background-color: var(--red-bg);
-            border: 1px solid rgba(248, 81, 73, 0.4);
-            border-radius: 6px;
-            padding: 16px 20px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }}
-        .banner-incident-text {{
+        .navbar-brand {{
             display: flex;
             align-items: center;
             gap: 12px;
+        }}
+        .navbar-title {{
+            font-size: 14px;
+            font-weight: 600;
+            color: #ffffff;
+            letter-spacing: -0.2px;
+        }}
+        .tag-ps7 {{
+            background-color: #1f2428;
+            color: var(--text-main);
+            border: 1px solid var(--border);
+            font-size: 11px;
+            font-weight: 500;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+        }}
+        .btn-action {{
+            background-color: #238636;
+            color: #ffffff;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 6px 14px;
+            font-size: 12px;
+            font-weight: 500;
+            border-radius: 6px;
+            text-decoration: none;
+            cursor: pointer;
+            transition: background-color 0.15s;
+        }}
+        .btn-action:hover {{
+            background-color: #2ea043;
+        }}
+        .container {{
+            max-width: 1150px;
+            margin: 24px auto;
+            padding: 0 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }}
+        .status-banner {{
+            background-color: #161b22;
+            border: 1px solid #f85149;
+            border-left: 4px solid #f85149;
+            border-radius: 6px;
+            padding: 14px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }}
+        .status-banner-info {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 13px;
+        }}
+        .status-label {{
             font-weight: 600;
             color: #ffffff;
         }}
-        .status-pill {{
-            background-color: var(--red);
-            color: #ffffff;
-            font-size: 0.75em;
-            padding: 2px 8px;
-            border-radius: 12px;
+        .badge-critical {{
+            background-color: var(--badge-red-bg);
+            color: var(--badge-red-text);
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            letter-spacing: 0.5px;
             text-transform: uppercase;
         }}
-        .box {{
-            background-color: var(--card-bg);
+        .panel {{
+            background-color: var(--bg-card);
             border: 1px solid var(--border);
             border-radius: 6px;
             overflow: hidden;
         }}
-        .box-header {{
+        .panel-header {{
             background-color: #161b22;
             border-bottom: 1px solid var(--border);
-            padding: 12px 20px;
+            padding: 10px 18px;
+            font-size: 12px;
             font-weight: 600;
-            font-size: 0.95em;
             color: #ffffff;
             display: flex;
             align-items: center;
             justify-content: space-between;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
         }}
-        .box-body {{
-            padding: 24px;
+        .panel-subtitle {{
+            font-size: 11px;
+            font-weight: 400;
+            color: var(--text-muted);
+            text-transform: none;
+            letter-spacing: 0;
         }}
-        /* Terminal / Log Viewer Style */
         .log-terminal {{
-            background-color: #0d1117;
-            border: 1px solid var(--border);
-            border-radius: 6px;
-            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
-            font-size: 0.85em;
+            background-color: var(--bg-terminal);
+            font-family: 'JetBrains Mono', Consolas, Menlo, monospace;
+            font-size: 12px;
             overflow-x: auto;
         }}
         .log-row {{
             display: flex;
-            align-items: flex-start;
-            border-bottom: 1px solid rgba(48, 54, 61, 0.4);
-            padding: 10px 16px;
-            transition: background 0.15s;
+            align-items: baseline;
+            border-bottom: 1px solid #161b22;
+            padding: 8px 16px;
         }}
         .log-row:last-child {{ border-bottom: none; }}
-        .log-row:hover {{ background-color: rgba(177, 186, 196, 0.04); }}
-        .log-num {{
+        .log-index {{
             color: var(--text-muted);
-            min-width: 30px;
-            user-select: none;
+            min-width: 24px;
             text-align: right;
             margin-right: 16px;
+            user-select: none;
         }}
-        .log-count-badge {{
-            background-color: rgba(248, 81, 73, 0.15);
-            color: var(--red);
-            border: 1px solid rgba(248, 81, 73, 0.3);
+        .log-count-pill {{
+            background-color: #1f2428;
+            color: #ff7b72;
+            border: 1px solid #30363d;
             padding: 1px 6px;
             border-radius: 4px;
-            font-weight: 600;
+            font-size: 11px;
+            font-weight: 500;
             margin-right: 12px;
             white-space: nowrap;
         }}
-        .log-content {{
+        .log-text {{
             color: #e6edf3;
             word-break: break-all;
             flex: 1;
         }}
-        /* Markdown / RCA Styling */
-        .markdown-body h3 {{
-            border-bottom: 1px solid var(--border);
-            padding-bottom: 8px;
+        .report-content {{
+            padding: 24px 32px;
+            font-size: 13px;
+        }}
+        .report-content h3 {{
+            font-size: 16px;
+            font-weight: 600;
             color: #ffffff;
             margin-top: 0;
+            margin-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
         }}
-        .markdown-body h4 {{
+        .report-content h4 {{
+            font-size: 13px;
+            font-weight: 600;
             color: #ffffff;
             margin-top: 24px;
             margin-bottom: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
         }}
-        .markdown-body hr {{
+        .report-content hr {{
             height: 1px;
             background-color: var(--border);
             border: none;
-            margin: 24px 0;
+            margin: 20px 0;
         }}
-        .markdown-body code {{
+        .report-content code {{
             background-color: var(--code-bg);
-            padding: 0.2em 0.4em;
-            border-radius: 6px;
-            font-family: ui-monospace, SFMono-Regular, monospace;
-            font-size: 0.9em;
+            border: 1px solid #22272e;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', Consolas, monospace;
+            font-size: 12px;
             color: #ff7b72;
         }}
-        .markdown-body ul {{
+        .report-content ul {{
             padding-left: 20px;
+            margin: 0;
         }}
-        .markdown-body li {{
-            margin-bottom: 8px;
+        .report-content li {{
+            margin-bottom: 6px;
+            color: var(--text-main);
         }}
         .task-list-item {{
             list-style-type: none;
@@ -285,50 +314,48 @@ HTML_UI = """
             gap: 8px;
         }}
         .task-list-item input[type="checkbox"] {{
-            accent-color: var(--btn-green);
-            width: 16px;
-            height: 16px;
+            accent-color: #238636;
+            width: 14px;
+            height: 14px;
             cursor: default;
+            margin: 0;
         }}
     </style>
 </head>
 <body>
     <div class="navbar">
-        <div class="navbar-title">
-            <span>🛡️ SRE Copilot</span>
-            <span class="badge-ps7">Problem Statement 7: Log RCA Assistant</span>
+        <div class="navbar-brand">
+            <span class="navbar-title">SRE Incident Console</span>
+            <span class="tag-ps7">PS7: Autonomous Log RCA</span>
         </div>
-        <a href="/analyze" class="btn-primary">⚡ Re-Run AI Log Analysis</a>
+        <a href="/analyze" class="btn-action">Re-Run AI Log Analysis</a>
     </div>
 
     <div class="container">
-        <div class="banner-incident">
-            <div class="banner-incident-text">
-                <span style="font-size: 1.2em;">🚨</span>
-                <span>Active Incident: <strong>#INC-2026-725-ALPHA</strong></span>
-                <span class="status-pill">Canary Rollback Triggered</span>
+        <div class="status-banner">
+            <div class="status-banner-info">
+                <span class="badge-critical">Critical / Canary Aborted</span>
+                <span class="status-label">Active Incident Reference: INC-2026-725-ALPHA</span>
             </div>
-            <span style="font-size: 0.85em; color: var(--text-muted);">Detected via Prometheus & Argo Rollouts</span>
+            <span style="font-size: 12px; color: var(--text-muted);">Detected via Prometheus Telemetry & Argo Rollouts</span>
         </div>
 
-        <div class="box">
-            <div class="box-header">
-                <span>🔥 Clustered Container Error Stream</span>
-                <span style="font-size: 0.85em; font-weight: normal; color: var(--text-muted);">Aggregated from Kubernetes Pods via regex pattern matching</span>
+        <div class="panel">
+            <div class="panel-header">
+                <span>Clustered Container Error Stream</span>
+                <span class="panel-subtitle">Aggregated from Kubernetes Pods via Regex Pattern Matching</span>
             </div>
-            <div class="box-body" style="padding: 16px;">
-                <div class="log-terminal">
-                    {clustered_html}
-                </div>
+            <div class="log-terminal">
+                {clustered_html}
             </div>
         </div>
 
-        <div class="box">
-            <div class="box-header">
-                <span>✨ AI Copilot Root Cause & Remediation Playbook</span>
-                <span style="font-size: 0.85em; font-weight: normal; color: var(--text-muted);">Synthesized in real-time for On-Call Engineers</span>
+        <div class="panel">
+            <div class="panel-header">
+                <span>AI Root Cause Analysis and Remediation Playbook</span>
+                <span class="panel-subtitle">Synthesized for On-Call Engineering Teams</span>
             </div>
-            <div class="box-body markdown-body">
+            <div class="report-content">
                 {rca_html}
             </div>
         </div>
@@ -342,18 +369,16 @@ def dashboard():
     clustered = cluster_log_patterns(SIMULATED_LOG_STREAM)
     rca_text = generate_ai_rca(clustered)
     
-    # Format clustered logs as GitHub Terminal Rows
     clustered_html = ""
     for c in clustered:
         clustered_html += f'''
         <div class="log-row">
-            <div class="log-num">{c["id"]}</div>
-            <div><span class="log-count-badge">{c["occurrences"]}x count</span></div>
-            <div class="log-content">{c["pattern"]}</div>
+            <div class="log-index">{c["id"]}</div>
+            <div><span class="log-count-pill">{c["occurrences"]}x count</span></div>
+            <div class="log-text">{c["pattern"]}</div>
         </div>
         '''
         
-    # Convert Markdown to GitHub-styled HTML
     rca_html = rca_text.replace("\n\n", "<br><br>")
     rca_html = rca_html.replace("### ", "<h3>").replace("#### ", "<h4>")
     rca_html = rca_html.replace("---", "<hr>")
