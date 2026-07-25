@@ -24,7 +24,7 @@ spec:
         # Actually, Argo Rollouts injects {{args.service-name}} and we can use the pod template hash to target the new release.
         # But this query simply checks if the 500 error rate across the service is > 5%.
         query: |
-          sum(rate(http_requests_total{status="500", job="{{args.service-name}}"}[1m])) 
+          sum(rate(http_requests_total{status="500"}[1m])) 
           / 
-          sum(rate(http_requests_total{job="{{args.service-name}}"}[1m])) 
+          sum(rate(http_requests_total[1m])) 
           OR on() vector(0)
