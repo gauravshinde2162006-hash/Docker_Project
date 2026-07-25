@@ -1,0 +1,30 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: error-rate
+  namespace: default
+spec:
+  args:
+  - name: service-name
+  metrics:
+  - name: error-rate
+    # Run the query every 10 seconds while the canary is paused
+    interval: 10s
+    # Fail if the metric returns false (e.g. error rate > 5%)
+    # successCondition means: "The query must return a value < 0.05"
+    successCondition: result[0] < 0.05
+    # If the metric is missing (no traffic yet), consider it successful temporarily or just wait
+    failureLimit: 3
+    provider:
+      prometheus:
+        address: http://prometheus-server.monitoring.svc.cluster.local:9090
+        # PromQL: (rate of 500s) / (rate of all requests)
+        # We filter by pod to only check the canary pods. Argo Rollouts automatically sets the hash label for the canary pods.
+        # But for simplicity, we just check the overall error rate or a specific tag. 
+        # Actually, Argo Rollouts injects {{args.service-name}} and we can use the pod template hash to target the new release.
+        # But this query simply checks if the 500 error rate across the service is > 5%.
+        query: |
+          sum(rate(http_requests_total{status="500", job="{{args.service-name}}"}[1m])) 
+          / 
+          sum(rate(http_requests_total{job="{{args.service-name}}"}[1m])) 
+          OR on() vector(0)

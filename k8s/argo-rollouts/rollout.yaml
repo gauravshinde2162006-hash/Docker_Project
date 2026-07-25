@@ -1,0 +1,57 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: demo-app
+  namespace: default
+spec:
+  replicas: 4
+  strategy:
+    canary:
+      # Use an analysis template to trigger rollback on errors
+      analysis:
+        templates:
+        - templateName: error-rate
+        startingStep: 1
+        args:
+        - name: service-name
+          value: demo-app
+      steps:
+      - setWeight: 20
+      # Pause for 30 seconds to let analysis run on the 20% traffic
+      - pause: {duration: 30s}
+      - setWeight: 50
+      - pause: {duration: 30s}
+      - setWeight: 100
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: demo-app
+  template:
+    metadata:
+      labels:
+        app: demo-app
+    spec:
+      containers:
+      - name: demo-app
+        # This image will be overwritten by CI when a new push occurs
+        image: docker.io/myuser/demo-app:v1.0.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+        env:
+        # We can dynamically inject SIMULATE_FAILURE based on configmaps
+        - name: SIMULATE_FAILURE
+          value: "false"
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 5

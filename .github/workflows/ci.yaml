@@ -1,0 +1,70 @@
+name: CI Pipeline
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'app/**'
+
+env:
+  IMAGE_NAME: ${{ secrets.DOCKERHUB_USERNAME }}/demo-app
+  DOCKER_HUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+
+jobs:
+  build-scan-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx (Docker Build Cloud)
+        uses: docker/setup-buildx-action@v2
+        # To use Docker Build Cloud, you would configure the builder here:
+        # with:
+        #   driver: cloud
+        #   endpoint: "cloud-project-id"
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build image for scanning
+        uses: docker/build-push-action@v4
+        with:
+          context: ./app
+          push: false
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+      - name: Docker Scout Vulnerability Scan
+        uses: docker/scout-action@v1
+        with:
+          command: cves
+          image: ${{ env.IMAGE_NAME }}:${{ github.sha }}
+          # Fail build if Critical or High vulnerabilities are found
+          only-severities: critical,high
+          exit-code: true
+
+      - name: Push image to registry
+        if: success()
+        uses: docker/build-push-action@v4
+        with:
+          context: ./app
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.IMAGE_NAME }}:latest
+
+      - name: Update GitOps Manifest
+        if: success()
+        run: |
+          # Replace the old tag with the new github.sha in the Argo Rollouts manifest
+          sed -i "s|image: .*/demo-app:.*|image: ${{ env.IMAGE_NAME }}:${{ github.sha }}|g" k8s/argo-rollouts/rollout.yaml
+          git config --global user.name 'GitHub Actions'
+          git config --global user.email 'actions@github.com'
+          git add k8s/argo-rollouts/rollout.yaml
+          git commit -m "chore: Update image tag to ${{ github.sha }} [skip ci]" || echo "No changes to commit"
+          git push
