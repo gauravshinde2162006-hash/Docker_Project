@@ -17,7 +17,7 @@ spec:
     failureLimit: 3
     provider:
       prometheus:
-        address: http://prometheus-server.monitoring.svc.cluster.local:9090
+        address: http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090
         # PromQL: (rate of 500s) / (rate of all requests)
         # We filter by pod to only check the canary pods. Argo Rollouts automatically sets the hash label for the canary pods.
         # But for simplicity, we just check the overall error rate or a specific tag. 

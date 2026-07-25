@@ -34,14 +34,14 @@ spec:
       containers:
       - name: demo-app
         # This image will be overwritten by CI when a new push occurs
-        image: docker.io/myuser/demo-app:v1.0.0
-        imagePullPolicy: Always
+        image: demo-app:v1.0.0
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
         env:
         # We can dynamically inject SIMULATE_FAILURE based on configmaps
         - name: SIMULATE_FAILURE
-          value: "false"
+          value: "true"
         resources:
           requests:
             cpu: 100m
