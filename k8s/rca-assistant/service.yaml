@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: rca-assistant
+  namespace: default
+  labels:
+    app: rca-assistant
+spec:
+  ports:
+  - port: 80
+    targetPort: 8001
+    protocol: TCP
+    name: http
+  selector:
+    app: rca-assistant
+  type: ClusterIP

@@ -1,9 +1,18 @@
 import os
 import random
 import time
+import logging
 from fastapi import FastAPI, Response, Request
 from fastapi.responses import HTMLResponse
 from prometheus_client import Counter, Histogram, generate_latest, CONTENT_TYPE_LATEST
+
+# Configure structured error logging for PS7 Log RCA Assistant
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] [%(service)s] %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+logger = logging.getLogger("demo-app")
 
 app = FastAPI(title="Demo Microservice")
 
@@ -19,10 +28,17 @@ REQUEST_LATENCY = Histogram(
     ["method", "endpoint"]
 )
 
-# Configuration from Environment Variables
 SIMULATE_FAILURE = os.getenv("SIMULATE_FAILURE", "false").lower() == "true"
 VERSION = os.getenv("APP_VERSION", "v1.0.0 (Stable)")
-COLOR_THEME = os.getenv("COLOR_THEME", "#00f0ff") # Neon blue for stable, orange/red for canary
+COLOR_THEME = os.getenv("COLOR_THEME", "#00f0ff")
+
+# Simulated realistic error stack traces for AI Log RCA Analysis
+ERROR_SCENARIOS = [
+    "DatabaseTimeoutException: Connection pool exhausted while connecting to db-primary.cluster.local:5432 after 5000ms. Max connections (50) reached.",
+    "NullPointerException in UserService.getUserProfile() at line 142: user_id token payload evaluates to None during session validation.",
+    "UpstreamGatewayTimeout: PaymentService API at http://payment-gateway.internal/v2/charge failed to respond within SLA (3000ms).",
+    "OutOfMemoryError: Java heap space exhausted in DataExportWorker when attempting to serialize 50,000 user transaction records."
+]
 
 @app.middleware("http")
 async def monitor_requests(request: Request, call_next):
@@ -162,8 +178,11 @@ HTML_TEMPLATE = """
 @app.get("/", response_class=HTMLResponse)
 def read_root(request: Request):
     if SIMULATE_FAILURE:
-        # Simulate a bug: 20% of requests fail with HTTP 500
+        # Simulate a bug: 20% of requests fail with HTTP 500 and log descriptive stack traces for PS7
         if random.random() < 0.20:
+            error_msg = random.choice(ERROR_SCENARIOS)
+            logger.error(f"CRITICAL ANOMALY DETECTED: {error_msg}", extra={"service": "demo-app-canary"})
+            
             html_content = HTML_TEMPLATE.format(
                 color_theme="#ff3333",
                 status_bg="rgba(255, 51, 51, 0.1)",
@@ -174,7 +193,9 @@ def read_root(request: Request):
                 bug_status="ACTIVE (20% Failure Rate)"
             )
             return HTMLResponse(content=html_content, status_code=500)
-        time.sleep(random.uniform(0.1, 0.3)) # Simulate latency spike
+        time.sleep(random.uniform(0.1, 0.3))
+    else:
+        logger.info("Health check OK - Status 200", extra={"service": "demo-app-stable"})
         
     html_content = HTML_TEMPLATE.format(
         color_theme=COLOR_THEME,

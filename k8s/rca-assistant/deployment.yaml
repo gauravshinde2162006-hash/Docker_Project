@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rca-assistant
+  namespace: default
+  labels:
+    app: rca-assistant
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rca-assistant
+  template:
+    metadata:
+      labels:
+        app: rca-assistant
+    spec:
+      containers:
+      - name: rca-assistant
+        image: docker.io/myuser/rca-assistant:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8001
+        env:
+        # Optional: Inject API keys via secret or leave blank for intelligent on-board AI fallback
+        - name: GEMINI_API_KEY
+          value: ""
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8001
+          initialDelaySeconds: 5
+          periodSeconds: 10
